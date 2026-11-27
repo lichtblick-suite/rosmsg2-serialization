@@ -135,9 +135,11 @@ export class MessageWriter {
       const nestedMessage = messageObj?.[field.name];
 
       if (field.isArray === true) {
-        const arrayLength = field.arrayLength ?? fieldLength(nestedMessage);
-        const dataIsArray = Array.isArray(nestedMessage) || ArrayBuffer.isView(nestedMessage);
-        const dataArray = (dataIsArray ? nestedMessage : []) as unknown[];
+        // A missing array is written as its default value, or as an empty sequence when it has none
+        const arrayValue = nestedMessage ?? field.defaultValue;
+        const arrayLength = field.arrayLength ?? fieldLength(arrayValue);
+        const dataIsArray = Array.isArray(arrayValue) || ArrayBuffer.isView(arrayValue);
+        const dataArray = (dataIsArray ? arrayValue : []) as unknown[];
 
         if (field.arrayLength == undefined) {
           // uint32 array length for dynamic arrays
@@ -163,7 +165,10 @@ export class MessageWriter {
           // Primitive array
           const entrySize = this.#getPrimitiveSize(field.type);
           const alignment = field.type === "time" || field.type === "duration" ? 4 : entrySize;
-          newOffset += padding(newOffset, alignment);
+          if (arrayLength > 0) {
+            // CdrWriter aligns only before the first element, like Fast CDR
+            newOffset += padding(newOffset, alignment);
+          }
           newOffset += entrySize * arrayLength;
         }
       } else {
@@ -210,9 +215,11 @@ export class MessageWriter {
       const nestedMessage = messageObj?.[field.name];
 
       if (field.isArray === true) {
-        const arrayLength = field.arrayLength ?? fieldLength(nestedMessage);
-        const dataIsArray = Array.isArray(nestedMessage) || ArrayBuffer.isView(nestedMessage);
-        const dataArray = (dataIsArray ? nestedMessage : []) as unknown[];
+        // A missing array is written as its default value, or as an empty sequence when it has none
+        const arrayValue = nestedMessage ?? field.defaultValue;
+        const arrayLength = field.arrayLength ?? fieldLength(arrayValue);
+        const dataIsArray = Array.isArray(arrayValue) || ArrayBuffer.isView(arrayValue);
+        const dataArray = (dataIsArray ? arrayValue : []) as unknown[];
 
         if (field.arrayLength == undefined) {
           // uint32 array length for dynamic arrays
@@ -238,7 +245,7 @@ export class MessageWriter {
         } else {
           // Primitive array
           const arrayWriter = this.#getPrimitiveArrayWriter(field.type);
-          arrayWriter(nestedMessage, field.defaultValue, writer, field.arrayLength);
+          arrayWriter(arrayValue, field.defaultValue, writer, field.arrayLength);
         }
       } else {
         if (field.isComplex === true) {
@@ -382,7 +389,7 @@ function boolArray(
     const array = new Int8Array(value);
     writer.int8Array(array);
   } else {
-    writer.int8Array((defaultValue ?? new Array(arrayLength).fill(0)) as number[]);
+    writer.int8Array((defaultValue ?? new Array(arrayLength ?? 0).fill(0)) as number[]);
   }
 }
 
@@ -398,7 +405,7 @@ function int8Array(
     const array = new Int8Array(value);
     writer.int8Array(array);
   } else {
-    writer.int8Array((defaultValue ?? new Array(arrayLength).fill(0)) as number[]);
+    writer.int8Array((defaultValue ?? new Array(arrayLength ?? 0).fill(0)) as number[]);
   }
 }
 
@@ -416,7 +423,7 @@ function uint8Array(
     const array = new Uint8Array(value);
     writer.uint8Array(array);
   } else {
-    writer.uint8Array((defaultValue ?? new Array(arrayLength).fill(0)) as number[]);
+    writer.uint8Array((defaultValue ?? new Array(arrayLength ?? 0).fill(0)) as number[]);
   }
 }
 
@@ -432,7 +439,7 @@ function int16Array(
     const array = new Int16Array(value);
     writer.int16Array(array);
   } else {
-    writer.int16Array((defaultValue ?? new Array(arrayLength).fill(0)) as number[]);
+    writer.int16Array((defaultValue ?? new Array(arrayLength ?? 0).fill(0)) as number[]);
   }
 }
 
@@ -448,7 +455,7 @@ function uint16Array(
     const array = new Uint16Array(value);
     writer.uint16Array(array);
   } else {
-    writer.uint16Array((defaultValue ?? new Array(arrayLength).fill(0)) as number[]);
+    writer.uint16Array((defaultValue ?? new Array(arrayLength ?? 0).fill(0)) as number[]);
   }
 }
 
@@ -464,7 +471,7 @@ function int32Array(
     const array = new Int32Array(value);
     writer.int32Array(array);
   } else {
-    writer.int32Array((defaultValue ?? new Array(arrayLength).fill(0)) as number[]);
+    writer.int32Array((defaultValue ?? new Array(arrayLength ?? 0).fill(0)) as number[]);
   }
 }
 
@@ -480,7 +487,7 @@ function uint32Array(
     const array = new Uint32Array(value);
     writer.uint32Array(array);
   } else {
-    writer.uint32Array((defaultValue ?? new Array(arrayLength).fill(0)) as number[]);
+    writer.uint32Array((defaultValue ?? new Array(arrayLength ?? 0).fill(0)) as number[]);
   }
 }
 
@@ -496,7 +503,7 @@ function int64Array(
     const array = new BigInt64Array(value);
     writer.int64Array(array);
   } else {
-    writer.int64Array((defaultValue ?? new Array(arrayLength).fill(0n)) as bigint[]);
+    writer.int64Array((defaultValue ?? new Array(arrayLength ?? 0).fill(0n)) as bigint[]);
   }
 }
 
@@ -512,7 +519,7 @@ function uint64Array(
     const array = new BigUint64Array(value);
     writer.uint64Array(array);
   } else {
-    writer.uint64Array((defaultValue ?? new Array(arrayLength).fill(0n)) as bigint[]);
+    writer.uint64Array((defaultValue ?? new Array(arrayLength ?? 0).fill(0n)) as bigint[]);
   }
 }
 
@@ -528,7 +535,7 @@ function float32Array(
     const array = new Float32Array(value);
     writer.float32Array(array);
   } else {
-    writer.float32Array((defaultValue ?? new Array(arrayLength).fill(0)) as number[]);
+    writer.float32Array((defaultValue ?? new Array(arrayLength ?? 0).fill(0)) as number[]);
   }
 }
 
@@ -544,7 +551,7 @@ function float64Array(
     const array = new Float64Array(value);
     writer.float64Array(array);
   } else {
-    writer.float64Array((defaultValue ?? new Array(arrayLength).fill(0)) as number[]);
+    writer.float64Array((defaultValue ?? new Array(arrayLength ?? 0).fill(0)) as number[]);
   }
 }
 
@@ -559,7 +566,7 @@ function stringArray(
       writer.string(typeof item === "string" ? item : "");
     }
   } else {
-    const array = (defaultValue ?? new Array(arrayLength).fill("")) as string[];
+    const array = (defaultValue ?? new Array(arrayLength ?? 0).fill("")) as string[];
     for (const item of array) {
       writer.string(item);
     }
@@ -577,7 +584,7 @@ function timeArray(
       time(item, undefined, writer);
     }
   } else {
-    const array = new Array(arrayLength).fill(undefined) as undefined[];
+    const array = new Array(arrayLength ?? 0).fill(undefined) as undefined[];
     for (const item of array) {
       time(item, undefined, writer);
     }

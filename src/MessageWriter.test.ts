@@ -276,6 +276,67 @@ describe("MessageWriter", () => {
     },
   );
 
+  describe("when a dynamic array field is missing from the message", () => {
+    it.each([
+      ["primitive", `float64[] values\nuint8 after`],
+      ["string", `string[] values\nuint8 after`],
+      ["time", `time[] values\nuint8 after`],
+      [
+        "complex",
+        `CustomType[] values\nuint8 after\n============\nMSG: custom_type/CustomType\nuint8 field`,
+      ],
+    ])(
+      "should write an empty sequence when the %s array is missing",
+      (_kind: string, msgDef: string) => {
+        // Given
+        const writer = new MessageWriter(parseMessageDefinition(msgDef, { ros2: true }));
+        const expected = Uint8Array.from([0, 1, 0, 0, ...[0x00, 0x00, 0x00, 0x00], 0x07]);
+
+        // When
+        const written = writer.writeMessage({ after: 7 });
+
+        // Then
+        expect(written).toBytesEqual(expected);
+      },
+    );
+
+    it("should size the message like the written bytes when the array is missing", () => {
+      // Given
+      const writer = new MessageWriter(
+        parseMessageDefinition(`float64[] values\nuint8 after`, { ros2: true }),
+      );
+
+      // When
+      const size = writer.calculateByteSize({ after: 7 });
+
+      // Then
+      expect(size).toEqual(writer.writeMessage({ after: 7 }).byteLength);
+    });
+
+    it("should write the default values with their length when the array has a default", () => {
+      // Given
+      const writer = new MessageWriter(
+        parseMessageDefinition(`int32[] values [1, 2]\nuint8 after`, { ros2: true }),
+      );
+      const expected = Uint8Array.from([
+        0,
+        1,
+        0,
+        0,
+        ...[0x02, 0x00, 0x00, 0x00], // length
+        ...[0x01, 0x00, 0x00, 0x00],
+        ...[0x02, 0x00, 0x00, 0x00],
+        0x07,
+      ]);
+
+      // When
+      const written = writer.writeMessage({ after: 7 });
+
+      // Then
+      expect(written).toBytesEqual(expected);
+    });
+  });
+
   it("should serialize a ROS 2 log message", () => {
     const expected = Uint8Array.from(
       Buffer.from(
